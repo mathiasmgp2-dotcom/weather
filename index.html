@@ -140,21 +140,21 @@
       -webkit-overflow-scrolling:touch;scrollbar-width:none;
     }
     .forecast-strip::-webkit-scrollbar { display:none; }
+    
     .fc-day {
       flex-shrink:0;
       padding:12px 10px;border-radius:16px;
-      display:flex;flex-direction:column;align-items:center;gap:5px;min-width:60px;
-    }
-    .fc-day {
-      background: rgba(255,255,255,0.32);
-      border: 0.5px solid rgba(255,255,255,0.60);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.70);
+      display:flex;flex-direction:column;align-items:center;gap:5px;min-width:62px;
+      background: rgba(255,255,255,0.35);
+      border: 0.5px solid rgba(255,255,255,0.65);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 2px 8px rgba(0,20,60,0.06);
     }
     .fc-day-name { font-size:.68rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em; }
     .fc-day-icon { font-size:1.4rem; }
     .fc-day-hi   { font-size:.9rem;font-weight:700;color:var(--t1); }
     .fc-day-lo   { font-size:.8rem;font-weight:400;color:var(--t2); }
     .fc-day-rain { font-size:.68rem;color:#2a7fd4;font-weight:500; }
+    .strip-placeholder { color:var(--t2);font-size:.8rem;padding:10px 6px;opacity:.7; }
 
     /* ── HOURLY STRIP ── */
     .hourly-strip {
@@ -162,15 +162,14 @@
       -webkit-overflow-scrolling:touch;scrollbar-width:none;
     }
     .hourly-strip::-webkit-scrollbar { display:none; }
+    
     .hr-item {
       flex-shrink:0;
       padding:11px 10px;border-radius:14px;
-      display:flex;flex-direction:column;align-items:center;gap:5px;min-width:52px;
-    }
-    .hr-item {
-      background: rgba(255,255,255,0.32);
-      border: 0.5px solid rgba(255,255,255,0.60);
-      box-shadow: inset 0 1px 0 rgba(255,255,255,0.70);
+      display:flex;flex-direction:column;align-items:center;gap:5px;min-width:54px;
+      background: rgba(255,255,255,0.35);
+      border: 0.5px solid rgba(255,255,255,0.65);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.75), 0 2px 8px rgba(0,20,60,0.06);
     }
     .hr-time  { font-size:.65rem;font-weight:600;color:var(--t3);letter-spacing:.03em; }
     .hr-icon  { font-size:1.1rem; }
@@ -362,7 +361,7 @@
     <div class="sec-label">Hourly</div>
     <div class="lg" style="padding:12px 14px 4px;border-radius:20px;">
       <div class="hourly-strip" id="hourly-strip">
-        <div style="color:var(--t2);font-size:.8rem;padding:8px 4px;opacity:.7;">Loading…</div>
+        <div class="strip-placeholder">Loading hourly…</div>
       </div>
     </div>
 
@@ -370,7 +369,7 @@
     <div class="sec-label">7-Day Forecast</div>
     <div class="lg" style="padding:12px 14px 4px;border-radius:20px;">
       <div class="forecast-strip" id="forecast-strip">
-        <div style="color:var(--t2);font-size:.8rem;padding:8px 4px;opacity:.7;">Loading…</div>
+        <div class="strip-placeholder">Loading forecast…</div>
       </div>
     </div>
 
@@ -442,20 +441,17 @@ async function fetchProxy(url, ms = 5000) {
   }
   throw new Error('All proxies failed');
 }
-async function fetchDirect(url, ms = 8000) {
-  // Try direct first (works if CORS is open), then fall through to proxy
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  try {
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
-  } catch(e) {
-    clearTimeout(t);
-    // Direct failed — fall back to proxy chain
-    return fetchProxy(url, ms);
-  }
+async function fetchDirect(url, ms = 9000) {
+  // Race: direct fetch vs proxy — whoever wins first
+  const tryDirect = () => {
+    const ctrl = new AbortController();
+    setTimeout(() => ctrl.abort(), ms);
+    return fetch(url, { signal: ctrl.signal })
+      .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); });
+  };
+  const tryProxy = () => fetchProxy(url, ms);
+  try { return await tryDirect(); }
+  catch { return tryProxy(); }
 }
 
 // Safety net
@@ -609,10 +605,10 @@ async function fetchWeather(city) {
     // 2. Open-Meteo (forecast + hourly) — no key, direct HTTPS
     setLoaderMsg('Loading forecast…');
     fetchOpenMeteo(lat, lon).catch(err => {
-      const msg = '<div style="padding:10px 4px;font-size:.8rem;color:var(--t2);">Could not load — ' + (err.message||'network error') + '</div>';
-      $('forecast-strip').innerHTML = msg;
-      $('hourly-strip').innerHTML   = msg;
+      $('forecast-strip').innerHTML = '<div class="strip-placeholder">Forecast unavailable</div>';
+      $('hourly-strip').innerHTML   = '<div class="strip-placeholder">Hourly unavailable</div>';
       $('t-gust').textContent = '—';
+      console.warn('Open-Meteo failed:', err);
     });
 
     // 3. WeatherAPI (air quality + moon) — optional
