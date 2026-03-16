@@ -563,6 +563,7 @@ async function fetchWeather(city) {
   setLoader(true); armSafety();
   try {
     // 1. Weatherstack (current)
+    setLoaderMsg('Loading current conditions…');
     const wsUrl = `http://api.weatherstack.com/current?access_key=${apiKeyWS}&query=${encodeURIComponent(city)}&units=m`;
     const ws = await fetchProxy(wsUrl);
     if (!ws || (!ws.current && !ws.error)) throw new Error('Bad response');
@@ -580,22 +581,23 @@ async function fetchWeather(city) {
 
     renderCurrent(ws);
 
-    // 2. Open-Meteo (forecast + hourly) — no key, direct HTTPS
-    setLoaderMsg('Loading forecast…');
-    fetchOpenMeteo(lat, lon).catch(() => {
+    // 2 & 3 — run in parallel, await both so loader stays until everything is done
+    setLoaderMsg('Loading forecast & air quality…');
+
+    const omPromise = fetchOpenMeteo(lat, lon).catch(() => {
       $('forecast-strip').innerHTML = '<div style="color:var(--t3);font-size:.8rem;padding:8px 0">Forecast unavailable</div>';
       $('hourly-strip').innerHTML   = '<div style="color:var(--t3);font-size:.8rem;padding:8px 0">Hourly unavailable</div>';
     });
 
-    // 3. WeatherAPI (air quality + moon) — optional
-    if (apiKeyWA) {
-      setLoaderMsg('Loading air quality…');
-      fetchWeatherAPI(city).catch(() => {
-        $('aqi-badge').textContent = 'Unavailable';
-      });
-    } else {
-      $('aqi-card').innerHTML = '<div style="color:var(--t3);font-size:.82rem;padding:4px 0">Add a WeatherAPI key in ⚙ Settings to see air quality &amp; moon data.</div>';
-    }
+    const waPromise = apiKeyWA
+      ? fetchWeatherAPI(city).catch(() => {
+          $('aqi-badge').textContent = 'Unavailable';
+        })
+      : Promise.resolve().then(() => {
+          $('aqi-card').innerHTML = '<div style="color:var(--t3);font-size:.82rem;padding:4px 0">Add a WeatherAPI key in ⚙ Settings to see air quality &amp; moon data.</div>';
+        });
+
+    await Promise.all([omPromise, waPromise]);
 
   } catch(e) {
     toast('Could not load weather. Try again.', 'err');
@@ -750,9 +752,18 @@ async function fetchWeatherAPI(city) {
   // Astronomy (moon)
   const astro = d.forecast?.forecastday?.[0]?.astro;
   if (astro) {
-    // Sunrise/Sunset override with real values
-    $('t-rise').textContent = astro.sunrise?.replace(' AM','').replace(' PM','')??'—';
-    $('t-set').textContent  = astro.sunset?.replace(' AM','').replace(' PM','')??'—';
+    // Parse "06:14 AM" / "06:32 PM" → 24h "06:14" / "18:32"
+    function to24h(str) {
+      if (!str) return '—';
+      const m = str.match(/(\d+):(\d+)\s*(AM|PM)/i);
+      if (!m) return str;
+      let h = parseInt(m[1]), min = m[2], period = m[3].toUpperCase();
+      if (period === 'AM' && h === 12) h = 0;
+      if (period === 'PM' && h !== 12) h += 12;
+      return `${h.toString().padStart(2,'0')}:${min}`;
+    }
+    $('t-rise').textContent = to24h(astro.sunrise);
+    $('t-set').textContent  = to24h(astro.sunset);
     $('t-moon').textContent = astro.moon_phase??'—';
     $('t-moon-icon').textContent = MOON_ICONS[astro.moon_phase]??'🌕';
   }
@@ -839,9 +850,54 @@ $('refresh-btn').addEventListener('click', () => {
   fetchWeather(lastCity);
   setTimeout(()=>$('refresh-btn').classList.remove('spin'),900);
 });
-$('settings-btn').addEventListener('click', () => {
-  if (confirm('Reset API keys?')) { ['wkey','wkeywa'].forEach(k=>localStorage.removeItem(k)); location.reload(); }
-});
+$('settings-btn').addEventListener('click', openSettings);
+
+function openSettings() {
+  // Build a settings overlay inline
+  let overlay = document.getElementById('settings-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'settings-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:35;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,20,.28);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);animation:fade-in .22s ease both;';
+    overlay.innerHTML = `
+      <div id="settings-sheet" style="width:100%;max-width:430px;border-radius:26px 26px 0 0;border-bottom:none;padding:0 0 calc(env(safe-area-inset-bottom)+16px);display:flex;flex-direction:column;background:rgba(220,238,252,.82);backdrop-filter:blur(52px) saturate(200%);-webkit-backdrop-filter:blur(52px) saturate(200%);border:0.5px solid rgba(255,255,255,.65);box-shadow:inset 0 1px 0 rgba(255,255,255,.85),0 -12px 48px rgba(0,30,80,.14);animation:sheet-up .36s cubic-bezier(.32,.72,0,1) both;">
+        <div style="width:36px;height:4px;border-radius:2px;background:rgba(0,0,20,.18);margin:10px auto 0;flex-shrink:0;"></div>
+        <div style="padding:14px 20px 0;font-size:1.05rem;font-weight:700;letter-spacing:-.02em;color:var(--t1);">⚙ API Keys</div>
+        <div style="padding:14px 20px;display:flex;flex-direction:column;gap:14px;">
+          <div class="key-row">
+            <div class="key-row-label">Weatherstack</div>
+            <div class="key-row-sub">Current conditions · <a href="https://weatherstack.com" target="_blank">weatherstack.com</a></div>
+            <input class="lg-input" type="password" id="cfg-ws" placeholder="Weatherstack API key…" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="key-row">
+            <div class="key-row-label">WeatherAPI <span style="font-weight:400;opacity:.6;">(optional)</span></div>
+            <div class="key-row-sub">Air quality &amp; moon · <a href="https://www.weatherapi.com" target="_blank">weatherapi.com</a></div>
+            <input class="lg-input" type="password" id="cfg-wa" placeholder="WeatherAPI key…" autocomplete="off" spellcheck="false">
+          </div>
+          <button class="btn-dark" id="cfg-save-btn">Save &amp; Reload</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeSettings(); });
+  }
+  // Pre-fill with stored keys
+  overlay.querySelector('#cfg-ws').value = apiKeyWS;
+  overlay.querySelector('#cfg-wa').value = apiKeyWA;
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.querySelector('#cfg-ws').focus(), 350);
+
+  overlay.querySelector('#cfg-save-btn').onclick = () => {
+    const ws = overlay.querySelector('#cfg-ws').value.trim();
+    if (!ws) { overlay.querySelector('#cfg-ws').focus(); return; }
+    localStorage.setItem('wkey',   ws);
+    localStorage.setItem('wkeywa', overlay.querySelector('#cfg-wa').value.trim());
+    location.reload();
+  };
+}
+function closeSettings() {
+  const o = document.getElementById('settings-overlay');
+  if (o) o.style.display = 'none';
+}
 
 // ── HELPERS
 function setLoader(v)    { $('loader').style.display = v?'flex':'none'; }
