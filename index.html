@@ -5,11 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Céu">
+  <meta name="apple-mobile-web-app-title" content="Weather">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="theme-color" content="#87CEEB" id="theme-meta">
   <link rel="manifest" href="manifest.json">
-  <title>Céu</title>
+  <title>Weather</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -477,7 +477,7 @@
   <div id="noise"></div>
 
   <!-- LOADING -->
-  <div id="loading"><div class="spinner-wrap glass"><div class="spinner"></div></div></div>
+  <div id="loading"><div class="spinner-wrap glass" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 28px;"><div class="spinner"></div><span id="loading-msg" style="font-size:0.78rem;font-weight:500;color:var(--text-secondary);letter-spacing:0.03em;">Buscando dados...</span></div></div>
 
   <!-- TOAST -->
   <div id="toast"></div>
@@ -486,7 +486,7 @@
   <div id="setup">
     <div class="setup-card glass">
       <div class="setup-icon">🌤️</div>
-      <div class="setup-title">Céu</div>
+      <div class="setup-title">Weather</div>
       <div class="setup-sub">Cole sua API key da <a href="https://weatherstack.com" target="_blank">Weatherstack</a> para começar.</div>
       <input class="glass-input" type="password" id="key-input" placeholder="Cole sua API key aqui..." autocomplete="off" spellcheck="false">
       <button class="btn-primary" id="save-btn">Entrar →</button>
@@ -568,7 +568,46 @@
   </div>
 
   <script>
-  const PROXY = 'https://api.allorigins.win/raw?url=';
+  // ── PROXIES (tentados em ordem até um funcionar)
+  const PROXIES = [
+    url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+  ];
+
+  async function fetchWithProxy(apiUrl, timeoutMs = 5000) {
+    let lastErr = null;
+    for (let i = 0; i < PROXIES.length; i++) {
+      const proxyUrl = PROXIES[i](apiUrl);
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        setLoadingMsg(i === 0 ? 'Buscando dados...' : `Tentativa ${i + 1}...`);
+        const res = await fetch(proxyUrl, { signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) continue;
+        const text = await res.text();
+        const data = JSON.parse(text);
+        if (data && data.contents) return JSON.parse(data.contents);
+        return data;
+      } catch(e) {
+        clearTimeout(timer);
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('Todos os proxies falharam');
+  }
+
+  // Safety net: nunca fica preso no loading por mais de 20s
+  let safetyTimer = null;
+  function armSafetyNet() {
+    clearTimeout(safetyTimer);
+    safetyTimer = setTimeout(() => {
+      setLoading(false);
+      showToast('Tempo esgotado. Tente novamente.', 'error');
+    }, 20000);
+  }
+  function clearSafetyNet() { clearTimeout(safetyTimer); }
 
   // ── STATE
   let apiKey   = localStorage.getItem('wkey') || '';
@@ -663,19 +702,20 @@
   // ── FETCH
   async function fetchWeather(city) {
     setLoading(true);
+    armSafetyNet();
     try {
       const apiUrl = `http://api.weatherstack.com/current?access_key=${apiKey}&query=${encodeURIComponent(city)}&units=m`;
-      const res = await fetch(PROXY + encodeURIComponent(apiUrl));
-      if (!res.ok) throw new Error('network');
-      const data = await res.json();
+      const data = await fetchWithProxy(apiUrl);
+      if (!data || (!data.current && !data.error)) throw new Error('Resposta inválida');
       if (data.error) { showToast(data.error.info || 'Erro na API', 'error'); return; }
       lastCity = city;
       localStorage.setItem('wcity', city);
       addRecent(city);
       render(data);
     } catch(e) {
-      showToast('Sem conexão ou chave inválida', 'error');
+      showToast('Não foi possível carregar. Tente novamente.', 'error');
     } finally {
+      clearSafetyNet();
       setLoading(false);
     }
   }
@@ -836,7 +876,8 @@
   });
 
   // ── HELPERS
-  function setLoading(v) { loading.style.display = v ? 'flex' : 'none'; }
+  function setLoading(v) { loading.style.display = v ? "flex" : "none"; if (!v) setLoadingMsg("Buscando dados..."); }
+  function setLoadingMsg(msg) { const el = document.getElementById("loading-msg"); if (el) el.textContent = msg; }
 
   let toastTimer;
   function showToast(msg, type = 'info') {
