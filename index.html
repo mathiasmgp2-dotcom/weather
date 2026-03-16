@@ -58,7 +58,7 @@
       border: 0.5px solid var(--lg-border);
       border-radius: 22px;
       box-shadow: inset 0 1px 0 var(--lg-shine), inset 0 -0.5px 0 rgba(255,255,255,0.08), 0 8px 32px var(--lg-shadow), 0 1px 0 rgba(255,255,255,0.35);
-      position: relative; overflow: hidden;
+      position: relative;
     }
     .lg::before {
       content:''; position:absolute; inset:0; border-radius:inherit; pointer-events:none;
@@ -359,7 +359,7 @@
 
     <!-- Hourly -->
     <div class="sec-label">Hourly</div>
-    <div class="lg" style="padding:12px 14px 4px;border-radius:20px;">
+    <div style="padding:12px 14px 4px;border-radius:20px;background:var(--lg-fill);backdrop-filter:var(--lg-blur);-webkit-backdrop-filter:var(--lg-blur);border:0.5px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-shine),0 8px 32px var(--lg-shadow);overflow:visible;position:relative;">
       <div class="hourly-strip" id="hourly-strip">
         <div class="strip-placeholder">Loading hourly…</div>
       </div>
@@ -367,7 +367,7 @@
 
     <!-- 7-day forecast -->
     <div class="sec-label">7-Day Forecast</div>
-    <div class="lg" style="padding:12px 14px 4px;border-radius:20px;">
+    <div style="padding:12px 14px 4px;border-radius:20px;background:var(--lg-fill);backdrop-filter:var(--lg-blur);-webkit-backdrop-filter:var(--lg-blur);border:0.5px solid var(--lg-border);box-shadow:inset 0 1px 0 var(--lg-shine),0 8px 32px var(--lg-shadow);overflow:visible;position:relative;">
       <div class="forecast-strip" id="forecast-strip">
         <div class="strip-placeholder">Loading forecast…</div>
       </div>
