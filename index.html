@@ -145,11 +145,16 @@
       padding:12px 10px;border-radius:16px;
       display:flex;flex-direction:column;align-items:center;gap:5px;min-width:60px;
     }
+    .fc-day {
+      background: rgba(255,255,255,0.32);
+      border: 0.5px solid rgba(255,255,255,0.60);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.70);
+    }
     .fc-day-name { font-size:.68rem;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.05em; }
     .fc-day-icon { font-size:1.4rem; }
     .fc-day-hi   { font-size:.9rem;font-weight:700;color:var(--t1); }
     .fc-day-lo   { font-size:.8rem;font-weight:400;color:var(--t2); }
-    .fc-day-rain { font-size:.68rem;color:#4a90d9;font-weight:500; }
+    .fc-day-rain { font-size:.68rem;color:#2a7fd4;font-weight:500; }
 
     /* ── HOURLY STRIP ── */
     .hourly-strip {
@@ -162,10 +167,15 @@
       padding:11px 10px;border-radius:14px;
       display:flex;flex-direction:column;align-items:center;gap:5px;min-width:52px;
     }
+    .hr-item {
+      background: rgba(255,255,255,0.32);
+      border: 0.5px solid rgba(255,255,255,0.60);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.70);
+    }
     .hr-time  { font-size:.65rem;font-weight:600;color:var(--t3);letter-spacing:.03em; }
     .hr-icon  { font-size:1.1rem; }
     .hr-temp  { font-size:.88rem;font-weight:600;color:var(--t1); }
-    .hr-rain  { font-size:.62rem;color:#4a90d9;font-weight:500; }
+    .hr-rain  { font-size:.62rem;color:#2a7fd4;font-weight:500; }
 
     /* ── AIR QUALITY BAR ── */
     .aqi-card { padding:16px 18px;border-radius:20px;opacity:0;animation:pop-in .4s .1s cubic-bezier(.34,1.56,.64,1) forwards; }
@@ -549,6 +559,17 @@ function dewPoint(tempC, rh) {
   return Math.round((b*alpha)/(a-alpha));
 }
 
+// 12h → 24h helper  e.g. "06:21 PM" → "18:21"
+function to24h(str) {
+  if (!str) return null;
+  const m = str.trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (!m) return str.replace(/ AM| PM/gi,'');
+  let h = parseInt(m[1]), min = m[2], period = m[3].toUpperCase();
+  if (period === 'AM' && h === 12) h = 0;
+  if (period === 'PM' && h !== 12) h += 12;
+  return h.toString().padStart(2,'0') + ':' + min;
+}
+
 // Moon phase from WeatherAPI
 const MOON_ICONS = {
   'New Moon':'🌑','Waxing Crescent':'🌒','First Quarter':'🌓','Waxing Gibbous':'🌔',
@@ -696,7 +717,7 @@ function renderHourly(d) {
     const hour = i % 24;
     const dayLight = hour >= 6 && hour < 20;
     const el = document.createElement('div');
-    el.className = 'hr-item lg';
+    el.className = 'hr-item';
     el.innerHTML = `
       <span class="hr-time">${hour.toString().padStart(2,'0')}:00</span>
       <span class="hr-icon">${wmoIcon(codes[i], dayLight)}</span>
@@ -720,7 +741,7 @@ function renderForecast(d) {
     const lo    = Math.round(d.daily.temperature_2m_min[i]);
     const rain  = d.daily.precipitation_sum[i]?.toFixed(1)??0;
     const el    = document.createElement('div');
-    el.className = 'fc-day lg';
+    el.className = 'fc-day';
     el.innerHTML = `
       <span class="fc-day-name">${dayN}</span>
       <span class="fc-day-icon">${wmoIcon(code)}</span>
@@ -757,11 +778,10 @@ async function fetchWeatherAPI(city) {
   // Astronomy (moon)
   const astro = d.forecast?.forecastday?.[0]?.astro;
   if (astro) {
-    // Sunrise/Sunset override with real values
-    $('t-rise').textContent = astro.sunrise?.replace(' AM','').replace(' PM','')??'—';
-    $('t-set').textContent  = astro.sunset?.replace(' AM','').replace(' PM','')??'—';
-    $('t-moon').textContent = astro.moon_phase??'—';
-    $('t-moon-icon').textContent = MOON_ICONS[astro.moon_phase]??'🌕';
+    $('t-rise').textContent = to24h(astro.sunrise) ?? '—';
+    $('t-set').textContent  = to24h(astro.sunset)  ?? '—';
+    $('t-moon').textContent = astro.moon_phase ?? '—';
+    $('t-moon-icon').textContent = MOON_ICONS[astro.moon_phase] ?? '🌕';
   }
 }
 
