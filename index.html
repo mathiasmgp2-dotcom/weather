@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Céu">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#0f0c29" id="theme-color-meta">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>Céu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Cormorant+Garamond:ital,wght@1,300&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg1: #0f0c29;
+      --bg2: #302b63;
+      --bg3: #24243e;
+      --text: rgba(255,255,255,0.95);
+      --sub:  rgba(255,255,255,0.55);
+      --glass: rgba(255,255,255,0.08);
+      --glass-b: rgba(255,255,255,0.18);
+      --accent: #ffffff;
+    }
+
+    html, body {
+      height: 100%; width: 100%;
+    }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: linear-gradient(160deg, var(--bg1), var(--bg2), var(--bg3));
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(env(safe-area-inset-top) + 28px) 24px calc(env(safe-area-inset-bottom) + 28px);
+      overflow: hidden;
+      transition: background 1.8s ease;
+      position: relative;
+    }
+
+    /* Animated bg blob */
+    body::before {
+      content: '';
+      position: fixed;
+      width: 70vmax; height: 70vmax;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(255,255,255,0.04) 0%, transparent 70%);
+      top: -20vmax; left: -20vmax;
+      pointer-events: none;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    @keyframes drift {
+      to { transform: translate(30vw, 20vh) scale(1.1); }
+    }
+
+    /* ── SETUP SCREEN ── */
+    #setup {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; width: 100%; max-width: 380px;
+      animation: fadeUp 0.6s ease both;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      padding: 24px;
+    }
+    #setup h2 {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 2.8rem; letter-spacing: 0.05em;
+      text-align: center;
+    }
+    #setup p {
+      color: var(--sub); font-size: 0.88rem;
+      text-align: center; line-height: 1.6;
+    }
+    #setup a { color: var(--text); }
+
+    /* ── APP SCREEN ── */
+    #app { display: none; width: 100%; max-width: 420px; height: 100%; flex-direction: column; justify-content: space-between; }
+    #app.visible { display: flex; }
+
+    /* TOP BAR */
+    .topbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px;
+    }
+    .location-btn {
+      background: none; border: none; color: var(--text);
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic; font-size: 1.5rem;
+      cursor: pointer; padding: 4px 0;
+      letter-spacing: 0.01em;
+      max-width: 220px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+      text-align: left;
+      opacity: 0.9;
+      transition: opacity 0.2s;
+    }
+    .location-btn:active { opacity: 0.6; }
+
+    .icon-btn {
+      background: var(--glass);
+      border: 1px solid var(--glass-b);
+      color: var(--text); border-radius: 50%;
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; font-size: 1rem;
+      flex-shrink: 0;
+      transition: background 0.2s;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .icon-btn:active { background: var(--glass-b); }
+
+    /* SEARCH OVERLAY */
+    #search-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      padding: 60px 24px 24px;
+      flex-direction: column; gap: 16px;
+      animation: fadeIn 0.2s ease both;
+    }
+    #search-overlay.open { display: flex; }
+
+    .search-row {
+      display: flex; gap: 10px; align-items: center;
+    }
+    .search-row input {
+      flex: 1;
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 14px; color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.05rem; padding: 14px 18px;
+      outline: none;
+    }
+    .search-row input::placeholder { color: rgba(255,255,255,0.4); }
+    .close-btn {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: white; border-radius: 12px;
+      padding: 14px 16px; font-size: 0.95rem;
+      cursor: pointer; white-space: nowrap;
+    }
+    .recents { display: flex; flex-direction: column; gap: 8px; }
+    .recents-title { color: var(--sub); font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 4px; }
+    .recent-item {
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px; padding: 13px 16px;
+      cursor: pointer; font-size: 0.95rem;
+      transition: background 0.15s;
+    }
+    .recent-item:active { background: rgba(255,255,255,0.14); }
+
+    /* MAIN CONTENT */
+    .main {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; gap: 0; padding: 20px 0;
+      animation: fadeUp 0.7s ease both;
+    }
+
+    .weather-icon {
+      font-size: 4.5rem; line-height: 1;
+      margin-bottom: 8px;
+      filter: drop-shadow(0 4px 24px rgba(255,255,255,0.2));
+      animation: float 4s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%,100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .temperature {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(7rem, 26vw, 9rem);
+      line-height: 0.9;
+      letter-spacing: -0.02em;
+      text-shadow: 0 8px 48px rgba(255,255,255,0.15);
+    }
+    .temp-unit {
+      font-size: 0.35em;
+      vertical-align: super;
+      opacity: 0.7;
+    }
+
+    .description {
+      font-family: 'Cormorant Garamond', serif;
+      font-style: italic;
+      font-size: clamp(1.3rem, 4vw, 1.6rem);
+      color: rgba(255,255,255,0.75);
+      letter-spacing: 0.02em;
+      margin-top: 6px;
+    }
+
+    .date-line {
+      font-size: 0.78rem;
+      color: var(--sub);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 10px;
+    }
+
+    /* STATS */
+    .stats {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 8px; width: 100%;
+    }
+    .stat {
+      background: var(--glass);
+      border: 1px solid var(--glass-b);
+      border-radius: 16px; padding: 14px 8px;
+      display: flex; flex-direction: column;
+      align-items: center; gap: 5px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      animation: fadeUp 0.8s ease both;
+    }
+    .stat:nth-child(2) { animation-delay: 0.05s; }
+    .stat:nth-child(3) { animation-delay: 0.1s; }
+    .stat:nth-child(4) { animation-delay: 0.15s; }
+    .stat-icon { font-size: 1.2rem; }
+    .stat-val {
+      font-size: 1rem; font-weight: 500;
+      letter-spacing: -0.02em;
+    }
+    .stat-lbl {
+      font-size: 0.65rem; color: var(--sub);
+      text-transform: uppercase; letter-spacing: 0.08em;
+    }
+
+    /* INPUT SHARED */
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 14px; color: white;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem; padding: 14px 18px;
+      outline: none;
+    }
+    input[type="text"]:focus, input[type="password"]:focus {
+      border-color: rgba(255,255,255,0.5);
+      background: rgba(255,255,255,0.14);
+    }
+    input::placeholder { color: rgba(255,255,255,0.35); }
+
+    .btn {
+      width: 100%; padding: 15px;
+      background: rgba(255,255,255,0.92);
+      color: #111; border: none; border-radius: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1rem; font-weight: 500;
+      cursor: pointer; letter-spacing: 0.02em;
+      transition: opacity 0.2s;
+    }
+    .btn:active { opacity: 0.75; }
+    .btn:disabled { opacity: 0.4; cursor: default; }
+
+    /* ERROR */
+    .error-toast {
+      position: fixed; bottom: 30px; left: 50%;
+      transform: translateX(-50%);
+      background: rgba(239,68,68,0.9);
+      color: white; border-radius: 12px;
+      padding: 12px 20px; font-size: 0.88rem;
+      z-index: 200; white-space: nowrap;
+      animation: fadeUp 0.3s ease both;
+      display: none;
+    }
+
+    /* LOADING */
+    .loading-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center;
+      display: none;
+    }
+    .spinner {
+      width: 36px; height: 36px;
+      border: 2px solid rgba(255,255,255,0.2);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+
+    .updated {
+      font-size: 0.7rem; color: var(--sub);
+      letter-spacing: 0.06em;
+    }
+
+    /* Refresh icon spin on load */
+    .spinning { animation: spin 0.7s linear infinite !important; }
+  </style>
+</head>
+<body>
+
+  <!-- SETUP SCREEN -->
+  <div id="setup">
+    <div style="font-size:3rem">🌤️</div>
+    <h2>Céu</h2>
+    <p>Cole sua API key da <a href="https://weatherstack.com" target="_blank">Weatherstack</a> pra começar.</p>
+    <input type="password" id="key-input" placeholder="Sua API key..." autocomplete="off" spellcheck="false">
+    <button class="btn" id="save-key-btn">Salvar e abrir →</button>
+    <p style="font-size:0.78rem; margin-top:4px;">⚠️ O plano free só funciona em HTTP. Para usar no GitHub Pages (HTTPS) você precisa de um plano pago, ou rode localmente.</p>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading-overlay" id="loading">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- APP SCREEN -->
+  <div id="app">
+    <!-- Top bar -->
+    <div class="topbar">
+      <button class="location-btn" id="location-btn" title="Trocar cidade">📍 —</button>
+      <div style="display:flex;gap:8px">
+        <button class="icon-btn" id="refresh-btn" title="Atualizar">↻</button>
+        <button class="icon-btn" id="settings-btn" title="Configurações">⚙</button>
+      </div>
+    </div>
+
+    <!-- Main -->
+    <div class="main" id="main-content">
+      <div class="weather-icon" id="w-icon">🌤️</div>
+      <div class="temperature" id="w-temp">—<span class="temp-unit">°C</span></div>
+      <div class="description" id="w-desc">carregando...</div>
+      <div class="date-line" id="w-date"></div>
+    </div>
+
+    <!-- Stats -->
+    <div>
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-icon">💧</span>
+          <span class="stat-val" id="s-hum">—</span>
+          <span class="stat-lbl">Umidade</span>
+        </div>
+        <div class="stat">
+          <span class="stat-icon">💨</span>
+          <span class="stat-val" id="s-wind">—</span>
+          <span class="stat-lbl">Vento</span>
+        </div>
+        <div class="stat">
+          <span class="stat-icon">🌡️</span>
+          <span class="stat-val" id="s-feel">—</span>
+          <span class="stat-lbl">Sensação</span>
+        </div>
+        <div class="stat">
+          <span class="stat-icon">👁️</span>
+          <span class="stat-val" id="s-vis">—</span>
+          <span class="stat-lbl">Visib.</span>
+        </div>
+      </div>
+      <p class="updated" id="updated-at" style="text-align:center;margin-top:10px;"></p>
+    </div>
+  </div>
+
+  <!-- SEARCH OVERLAY -->
+  <div id="search-overlay">
+    <div class="search-row">
+      <input type="text" id="city-input" placeholder="Buscar cidade..." autocomplete="off">
+      <button class="close-btn" id="close-search">✕</button>
+    </div>
+    <div class="recents" id="recents-box"></div>
+  </div>
+
+  <!-- ERROR TOAST -->
+  <div class="error-toast" id="error-toast"></div>
+
+  <script>
+    // ─── PROXY (necessário para GitHub Pages HTTPS + weatherstack HTTP free plan)
+    const PROXY = 'https://api.allorigins.win/raw?url=';
+
+    // ─── STATE
+    let apiKey = localStorage.getItem('wstack_key') || '';
+    let lastCity = localStorage.getItem('wstack_city') || 'São Paulo';
+    let recents = JSON.parse(localStorage.getItem('wstack_recents') || '["São Paulo"]');
+
+    // ─── DOM
+    const setupEl     = document.getElementById('setup');
+    const appEl       = document.getElementById('app');
+    const keyInput    = document.getElementById('key-input');
+    const saveKeyBtn  = document.getElementById('save-key-btn');
+    const locationBtn = document.getElementById('location-btn');
+    const refreshBtn  = document.getElementById('refresh-btn');
+    const settingsBtn = document.getElementById('settings-btn');
+    const searchOverlay = document.getElementById('search-overlay');
+    const cityInput   = document.getElementById('city-input');
+    const closeSearch = document.getElementById('close-search');
+    const recentsBox  = document.getElementById('recents-box');
+    const loading     = document.getElementById('loading');
+    const errorToast  = document.getElementById('error-toast');
+
+    // ─── INIT
+    if (apiKey) showApp();
+
+    saveKeyBtn.addEventListener('click', () => {
+      const k = keyInput.value.trim();
+      if (!k) return;
+      apiKey = k;
+      localStorage.setItem('wstack_key', k);
+      showApp();
+    });
+    keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') saveKeyBtn.click(); });
+
+    function showApp() {
+      setupEl.style.display = 'none';
+      appEl.classList.add('visible');
+      fetchWeather(lastCity);
+    }
+
+    // ─── FETCH
+    async function fetchWeather(city) {
+      setLoading(true);
+      try {
+        const apiUrl = `http://api.weatherstack.com/current?access_key=${apiKey}&query=${encodeURIComponent(city)}&units=m`;
+        const url = PROXY + encodeURIComponent(apiUrl);
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('Erro na requisição');
+        const data = await res.json();
+
+        if (data.error) {
+          showError(data.error.info || 'Erro ao buscar dados');
+          return;
+        }
+
+        lastCity = city;
+        localStorage.setItem('wstack_city', city);
+        addRecent(city);
+        renderWeather(data);
+      } catch(e) {
+        showError('Não foi possível carregar. Verifique sua conexão.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // ─── RENDER
+    const THEMES = {
+      sunny:   ['#C65A00','#E87B2E','#B03A00'],
+      clear:   ['#C65A00','#E87B2E','#B03A00'],
+      'partly cloudy': ['#2563EB','#4A90D9','#1E40AF'],
+      cloudy:  ['#475569','#64748B','#334155'],
+      overcast:['#374151','#4B5563','#1F2937'],
+      rain:    ['#1E3A5F','#1E40AF','#0D2454'],
+      drizzle: ['#1D4ED8','#3B82F6','#1E40AF'],
+      thunder: ['#111827','#1F2937','#0A0A0A'],
+      storm:   ['#111827','#1F2937','#0A0A0A'],
+      snow:    ['#93C5FD','#BAE6FD','#60A5FA'],
+      fog:     ['#6B7280','#9CA3AF','#4B5563'],
+      mist:    ['#78909C','#90A4AE','#546E7A'],
+      haze:    ['#78716C','#92400E','#57534E'],
+      night:   ['#0F0C29','#302B63','#24243E'],
+    };
+
+    const ICONS = {
+      sunny:'☀️', clear:'☀️', 'partly cloudy':'⛅', cloudy:'☁️',
+      overcast:'☁️', rain:'🌧️', drizzle:'🌦️', thunder:'⛈️',
+      storm:'🌩️', snow:'❄️', fog:'🌫️', mist:'🌫️', haze:'🌁',
+      night:'🌙',
+    };
+
+    function renderWeather(data) {
+      const c = data.current;
+      const loc = data.location;
+      const desc = (c.weather_descriptions[0] || '').toLowerCase();
+      const isNight = c.is_day === 'no';
+
+      // Pick theme
+      let themeKey = 'night';
+      if (!isNight) {
+        for (const key of Object.keys(THEMES)) {
+          if (desc.includes(key)) { themeKey = key; break; }
+        }
+        if (themeKey === 'night') themeKey = 'clear'; // default day
+      }
+
+      const [bg1, bg2, bg3] = THEMES[themeKey];
+      document.documentElement.style.setProperty('--bg1', bg1);
+      document.documentElement.style.setProperty('--bg2', bg2);
+      document.documentElement.style.setProperty('--bg3', bg3);
+      document.getElementById('theme-color-meta').setAttribute('content', bg1);
+
+      document.getElementById('w-icon').textContent = isNight ? ICONS.night : (ICONS[themeKey] || '🌤️');
+      document.getElementById('w-temp').innerHTML = `${Math.round(c.temperature)}<span class="temp-unit">°C</span>`;
+      document.getElementById('w-desc').textContent = c.weather_descriptions[0] || '';
+      document.getElementById('w-date').textContent = formatDate(loc.localtime);
+      document.getElementById('s-hum').textContent  = c.humidity + '%';
+      document.getElementById('s-wind').textContent = c.wind_speed + ' km/h';
+      document.getElementById('s-feel').textContent = Math.round(c.feelslike) + '°';
+      document.getElementById('s-vis').textContent  = c.visibility + ' km';
+
+      locationBtn.textContent = '📍 ' + loc.name;
+
+      const now = new Date();
+      document.getElementById('updated-at').textContent =
+        `atualizado às ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    }
+
+    function formatDate(localtime) {
+      if (!localtime) return '';
+      const d = new Date(localtime.replace(' ', 'T'));
+      const days = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+      const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+      return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]}`;
+    }
+
+    // ─── SEARCH
+    locationBtn.addEventListener('click', openSearch);
+
+    function openSearch() {
+      searchOverlay.classList.add('open');
+      renderRecents();
+      setTimeout(() => cityInput.focus(), 100);
+    }
+
+    closeSearch.addEventListener('click', () => {
+      searchOverlay.classList.remove('open');
+      cityInput.value = '';
+    });
+
+    cityInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') {
+        const city = cityInput.value.trim();
+        if (!city) return;
+        searchOverlay.classList.remove('open');
+        cityInput.value = '';
+        fetchWeather(city);
+      }
+    });
+
+    function renderRecents() {
+      recentsBox.innerHTML = '';
+      if (!recents.length) return;
+      const title = document.createElement('div');
+      title.className = 'recents-title';
+      title.textContent = 'Recentes';
+      recentsBox.appendChild(title);
+      recents.slice(0, 5).forEach(c => {
+        const el = document.createElement('div');
+        el.className = 'recent-item';
+        el.textContent = c;
+        el.addEventListener('click', () => {
+          searchOverlay.classList.remove('open');
+          cityInput.value = '';
+          fetchWeather(c);
+        });
+        recentsBox.appendChild(el);
+      });
+    }
+
+    function addRecent(city) {
+      recents = [city, ...recents.filter(c => c.toLowerCase() !== city.toLowerCase())].slice(0, 10);
+      localStorage.setItem('wstack_recents', JSON.stringify(recents));
+    }
+
+    // ─── REFRESH
+    refreshBtn.addEventListener('click', () => {
+      refreshBtn.classList.add('spinning');
+      fetchWeather(lastCity).finally(() => {
+        setTimeout(() => refreshBtn.classList.remove('spinning'), 500);
+      });
+    });
+
+    // ─── SETTINGS (reset key)
+    settingsBtn.addEventListener('click', () => {
+      if (confirm('Trocar API key?')) {
+        localStorage.removeItem('wstack_key');
+        location.reload();
+      }
+    });
+
+    // ─── HELPERS
+    function setLoading(v) {
+      loading.style.display = v ? 'flex' : 'none';
+    }
+
+    let toastTimer;
+    function showError(msg) {
+      errorToast.textContent = msg;
+      errorToast.style.display = 'block';
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => { errorToast.style.display = 'none'; }, 4000);
+    }
+
+    // ─── SERVICE WORKER
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
