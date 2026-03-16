@@ -1,6 +1,6 @@
 {
-  "name": "Céu — Clima",
-  "short_name": "Céu",
+  "name": "Weather",
+  "short_name": "Weather",
   "description": "App de clima com Weatherstack",
   "start_url": "./index.html",
   "display": "standalone",
