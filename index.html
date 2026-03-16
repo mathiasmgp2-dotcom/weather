@@ -424,6 +424,68 @@
     }
     .city-row-action:active { background: rgba(255,255,255,0.3); }
 
+    .sheet-search-btn {
+      flex-shrink: 0;
+      padding: 14px 18px;
+      background: rgba(10,10,30,0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: white; border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .sheet-search-btn:active { opacity: 0.6; transform: scale(0.96); }
+
+    .sheet-gps-row { padding: 0 20px 14px; }
+    .sheet-gps-full {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.28);
+      border: 1px solid rgba(255,255,255,0.55);
+      border-radius: 16px;
+      font-size: 0.95rem; font-weight: 500;
+      color: var(--text-primary);
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .sheet-gps-full:active { opacity: 0.6; transform: scale(0.98); }
+
+    .sheet-search-btn {
+      flex-shrink: 0;
+      padding: 14px 18px;
+      background: rgba(10,10,30,0.75);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 14px;
+      font-family: 'Figtree', sans-serif;
+      font-size: 0.95rem; font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.15s;
+      white-space: nowrap;
+    }
+    .sheet-search-btn:active { opacity: 0.6; transform: scale(0.96); }
+
+    .sheet-gps-row { padding: 0 20px 14px; }
+    .sheet-gps-full {
+      display: flex; align-items: center; gap: 10px;
+      padding: 14px 16px;
+      background: rgba(255,255,255,0.28);
+      border: 1px solid rgba(255,255,255,0.55);
+      border-radius: 16px;
+      font-size: 0.95rem; font-weight: 500;
+      color: var(--text-primary);
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.8);
+      transition: opacity 0.15s, transform 0.15s;
+    }
+    .sheet-gps-full:active { opacity: 0.6; transform: scale(0.98); }
+
     /* ── LOADING ── */
     #loading {
       display: none; position: fixed; inset: 0; z-index: 40;
@@ -570,8 +632,16 @@
       <div class="sheet-handle"></div>
       <div class="sheet-title">Localização</div>
       <div class="sheet-search-row">
-        <input class="glass-input" type="text" id="city-input" placeholder="Buscar cidade..." autocomplete="off">
-        <div class="sheet-gps-btn" id="gps-btn" title="Usar minha localização">📍</div>
+        <input class="glass-input" type="search" id="city-input"
+          placeholder="Ex: Porto Alegre..."
+          autocomplete="off" autocorrect="off" autocapitalize="words"
+          spellcheck="false" enterkeyhint="search">
+        <button class="sheet-search-btn" id="search-btn">Buscar</button>
+      </div>
+      <div class="sheet-gps-row">
+        <div class="sheet-gps-full" id="gps-btn">
+          <span>📍</span> Usar minha localização atual
+        </div>
       </div>
       <div class="sheet-scroll" id="sheet-scroll">
         <div id="favs-section"></div>
@@ -640,7 +710,6 @@
   const settingsBtn=$('settings-btn');
   const sheetBg   = $('sheet-bg');
   const cityInput = $('city-input');
-  const gpsBtn    = $('gps-btn');
   const loading   = $('loading');
   const toastEl   = $('toast');
 
@@ -774,33 +843,46 @@
     cityInput.value = '';
   }
 
-  cityInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      const city = cityInput.value.trim();
-      if (!city) return;
-      closeSheet();
-      fetchWeather(city);
-    }
+  function doSearch() {
+    const city = cityInput.value.trim();
+    if (!city) { cityInput.focus(); return; }
+    closeSheet();
+    fetchWeather(city);
+  }
+
+  // Funciona em mobile: keyup é mais confiável que keydown no teclado virtual
+  cityInput.addEventListener('keyup', e => {
+    if (e.key === 'Enter') doSearch();
   });
+  // Fallback: evento nativo do campo search
+  cityInput.addEventListener('search', doSearch);
+  $('search-btn').addEventListener('click', doSearch);
+  $('search-btn').addEventListener('touchend', e => { e.preventDefault(); doSearch(); });
 
   // GPS
-  gpsBtn.addEventListener('click', () => {
-    if (!navigator.geolocation) { showToast('GPS não disponível', 'error'); return; }
-    gpsBtn.textContent = '⏳';
+  function useGPS() {
+    const btn = $('gps-btn');
+    if (!navigator.geolocation) { showToast('GPS não disponível neste dispositivo', 'error'); return; }
+    btn.innerHTML = '<span>⏳</span> Buscando sua localização...';
+    btn.style.pointerEvents = 'none';
     navigator.geolocation.getCurrentPosition(
       pos => {
-        gpsBtn.textContent = '📍';
+        btn.innerHTML = '<span>📍</span> Usar minha localização atual';
+        btn.style.pointerEvents = '';
         closeSheet();
         const query = `${pos.coords.latitude},${pos.coords.longitude}`;
         fetchWeather(query);
       },
-      () => {
-        gpsBtn.textContent = '📍';
-        showToast('Permissão de GPS negada', 'error');
+      err => {
+        btn.innerHTML = '<span>📍</span> Usar minha localização atual';
+        btn.style.pointerEvents = '';
+        const msg = err.code === 1 ? 'Permissão negada — libere o GPS nas configurações' : 'Não foi possível obter localização';
+        showToast(msg, 'error');
       },
-      { timeout: 8000 }
+      { timeout: 10000, enableHighAccuracy: false }
     );
-  });
+  }
+  $('gps-btn').addEventListener('click', useGPS);
 
   function renderSheet() {
     const favsSection    = $('favs-section');
